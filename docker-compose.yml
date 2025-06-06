@@ -1,0 +1,60 @@
+version: "3.8"
+
+services:
+  # 1) Contenedor para la base de datos de autenticación (AuthDb)
+  authdb:
+    image: mysql:8.0
+    container_name: bd_authdb
+    environment:
+      MYSQL_ROOT_PASSWORD: "RootPassword123!"
+      MYSQL_DATABASE: "AuthDb"
+    volumes:
+      - ./db/auth/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-pRootPassword123!"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "3306:3306"
+
+  # 2) Contenedor para la base de datos de la lógica de farmacia (FarmaciaDb)
+  appdb:
+    image: mysql:8.0
+    container_name: bd_appdb
+    environment:
+      MYSQL_ROOT_PASSWORD: "RootPassword123!"
+      MYSQL_DATABASE: "FarmaciaDb"
+    volumes:
+      - ./db/app/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-pRootPassword123!"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "3307:3306"
+
+  # 3) Contenedor para la API ASP.NET Core
+  api:
+    build:
+      context: .
+      dockerfile: sistemas/Dockerfile
+    container_name: FarmaciaApiContainer
+    depends_on:
+      authdb:
+        condition: service_healthy
+      appdb:
+        condition: service_healthy
+    environment:
+      - ConnectionStrings__AuthDbConnection=Server=authdb;Port=3306;Database=AuthDb;Uid=root;Pwd=RootPassword123!;SslMode=None
+      - ConnectionStrings__FarmaciaDbConnection=Server=appdb;Port=3306;Database=FarmaciaDb;Uid=root;Pwd=RootPassword123!;SslMode=None
+      - ASPNETCORE_ENVIRONMENT=Development
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+    restart: on-failure
+
+volumes:
+  authdb_data: {}
+  appdb_data: {}
